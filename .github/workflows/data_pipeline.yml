@@ -1,0 +1,71 @@
+name: Snowflake Data Pipeline with Parallel & Sequential Jobs
+
+on:
+  push:
+    branches: [ main ]  
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: "0 0 * * *"  # Runs daily at midnight UTC
+  workflow_dispatch:  # Allows manual execution
+
+jobs:
+  # 🏁 Job 1: Data Quality Check
+  data_quality_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: pip install pandas
+
+      - name: Run Data Quality Check
+        run: python quality_check.py  
+
+  # 🏁 Job 2: Load Data to Snowflake (Runs in Parallel)
+  load_data:
+    runs-on: ubuntu-latest
+    needs: data_quality_check  # Ensures this runs AFTER data_quality_check
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: pip install pandas snowflake-connector-python
+
+      - name: Load Data to Snowflake
+        env:
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+        run: python load_data.py
+
+  # 🏁 Job 3: Deploy Model (Runs Sequentially)
+  deploy_model:
+    runs-on: ubuntu-latest
+    needs: [data_quality_check, load_data]  # Runs after both jobs succeed
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Deploy ML Model
+        run: echo "Deploying ML Model to Production..."
+
+  # 📩 Job 4: Send Notification
+  notify:
+    runs-on: ubuntu-latest
+    needs: deploy_model  # Runs after deployment
+    steps:
+      - name: Send Slack Notification
+        run: echo "Data pipeline and deployment completed!"  
